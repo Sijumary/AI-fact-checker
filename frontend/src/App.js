@@ -1,72 +1,84 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-export default function App() {
-  const [selectedFile, setSelectedFile] = useState(null);
+function App() {
+  const [file, setFile] = useState(null);
+  const [fileType, setFileType] = useState("image"); // "image" or "video"
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleUpload = async () => {
-    if (!selectedFile) return;
-    setLoading(true);
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
+    const type = e.target.files[0].type;
+    setFileType(type.startsWith("video") ? "video" : "image");
+    setResult(null);
+  };
 
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
     const formData = new FormData();
-    formData.append("file", selectedFile);
+    formData.append("file", file);
 
     try {
-      const res = await axios.post(
-        "http://localhost:8000/upload-base64",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-      setResult(res.data);
+      const endpoint =
+        fileType === "image"
+          ? "http://localhost:8000/analyze-image"
+          : "http://localhost:8000/analyze-video";
+
+      const response = await axios.post(endpoint, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      setResult(response.data);
     } catch (err) {
       console.error(err);
-      alert("Upload failed");
+      alert("Error analyzing file");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "600px", margin: "auto" }}>
-      <h2>AI Fact Checker</h2>
+    <div style={{ maxWidth: "600px", margin: "20px auto", fontFamily: "sans-serif" }}>
+      <h1>AI Fact Checker</h1>
 
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => setSelectedFile(e.target.files[0])}
-      />
-      <button onClick={handleUpload} disabled={!selectedFile || loading}>
-        {loading ? "Uploading..." : "Upload"}
+      <input type="file" onChange={handleFileChange} />
+      <button
+        onClick={handleUpload}
+        disabled={!file || loading}
+        style={{ marginLeft: "10px", padding: "5px 10px" }}
+      >
+        {loading ? "Analyzing..." : "Upload & Analyze"}
       </button>
 
-      {result && (
+      {result && fileType === "image" && (
         <div style={{ marginTop: "20px" }}>
-          <h3>EXIF Data</h3>
-          <pre
-            style={{
-              background: "#f0f0f0",
-              padding: "10px",
-              borderRadius: "5px",
-              overflowX: "auto",
-            }}
-          >
-            {JSON.stringify(result.exif, null, 2)}
-          </pre>
+          <h2>Image Analysis Result</h2>
+          <p><strong>File ID:</strong> {result.file_id}</p>
+          <p><strong>AI Detection:</strong> {result.ai_detection.result} ({result.ai_detection.confidence})</p>
+          <p><strong>ELA Score:</strong> {result.ela_score}</p>
+          <p><strong>EXIF Data:</strong></p>
+          <pre style={{ background: "#eee", padding: "10px" }}>{JSON.stringify(result.exif, null, 2)}</pre>
+          <img src={result.ela_image_url} alt="ELA result" style={{ maxWidth: "100%" }} />
+        </div>
+      )}
 
-          <h3>ELA Image</h3>
-          {result.ela_base64 ? (
-            <img
-              src={`data:image/png;base64,${result.ela_base64}`}
-              alt="ELA"
-              style={{ maxWidth: "100%", border: "1px solid #ccc" }}
-            />
-          ) : (
-            <p>No ELA image generated</p>
-          )}
+      {result && fileType === "video" && (
+        <div style={{ marginTop: "20px" }}>
+          <h2>Video Analysis Result</h2>
+          <p><strong>Video ID:</strong> {result.video_id}</p>
+          <p><strong>Result:</strong> {result.video_detection.result}</p>
+          <p><strong>Confidence:</strong> {result.video_detection.confidence}</p>
+          <p><strong>Frames Checked:</strong> {result.video_detection.frames_checked}</p>
+          <p><strong>Fake Frames:</strong> {result.video_detection.fake_frames}</p>
+          <p><strong>Real Frames:</strong> {result.video_detection.real_frames}</p>
         </div>
       )}
     </div>
   );
 }
+
+export default App;
